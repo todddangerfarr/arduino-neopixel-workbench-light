@@ -3,28 +3,28 @@
 
 #include <Adafruit_NeoPixel.h> 
 
-#define FIRST_LIGHT      6
-#define SECOND_LIGHT     5
 #define ON_OFF           2
-#define BRIGHTNESS_UP    12
+#define LEFT_LIGHT       5
+#define RIGHT_LIGHT      6
+#define MODE             8
 #define BRIGHTNESS_DOWN  11
+#define BRIGHTNESS_UP    12
 
-#define FIRST_LIGHT_LED_COUNT    36
+#define RIGHT_LIGHT_LED_COUNT    36
 
 // Varaibles 
-int powerState = 0; 
-int onOffButton; 
-int brightnessUpButton; 
-int brightnessDownButton; 
-int brightness = 75; 
+int mode = 0; 
+int powerState = 0;
+int brightness = 75;    
 
 // Constants 
 const int MAX_BRIGHTNESS = 200; 
-const int BUTTON_DELAY = 300; 
+const int BUTTON_DEBOUNCE = 300; 
 const int BRIGHTNESS_ADDER = 20;
+const int NUM_MODES = 2; 
 
 // Neopixel Class Instance
-Adafruit_NeoPixel strip(FIRST_LIGHT_LED_COUNT, FIRST_LIGHT, NEO_GRBW + NEO_KHZ800);
+Adafruit_NeoPixel strip(RIGHT_LIGHT_LED_COUNT, RIGHT_LIGHT, NEO_GRBW + NEO_KHZ800);
 
 void setup() {
   Serial.begin(9600);
@@ -34,103 +34,94 @@ void setup() {
   strip.show(); 
   strip.setBrightness(brightness); 
 
-  // Pin Modes
+  // Pin Modes  
+  pinMode(MODE, INPUT); 
   pinMode(ON_OFF, INPUT);
   pinMode(BRIGHTNESS_UP, INPUT);
   pinMode(BRIGHTNESS_DOWN, INPUT);
 }
 
-void loop() {
-  // Inputs
-  onOffButton = digitalRead(ON_OFF);
-  brightnessUpButton = digitalRead(BRIGHTNESS_UP);
-  brightnessDownButton = digitalRead(BRIGHTNESS_DOWN);
-
+void loop() { 
   // ON/OFF Button Handling, need delays for momentary action
-  if ((onOffButton == 1) && (powerState == 0)) {
+  if ((digitalRead(ON_OFF) == 1) && (powerState == 0)) {
     powerState = 1; 
+    Serial.println("ON/OFF Pressed");
     Serial.println("Power State = 1"); 
-    delay(BUTTON_DELAY);
-  } else if ((onOffButton == 1) && (powerState == 1)) {
+    Serial.print("Mode: "); Serial.println(mode); 
+    delay(BUTTON_DEBOUNCE);
+  } else if ((digitalRead(ON_OFF) == 1) && (powerState == 1)) {
     powerState = 0; 
+    Serial.println("ON/OFF Pressed");
     Serial.println("Power State = 0"); 
-    delay(BUTTON_DELAY); 
+    Serial.print("Mode: "); Serial.println(mode); 
+    delay(BUTTON_DEBOUNCE); 
   }
 
   // BRIGHTNESS Buttons Handling
-  if (brightnessUpButton == 1) {
+  if (digitalRead(BRIGHTNESS_UP) == 1) {
     Serial.println("Brightness UP Pressed");
     if (brightness < MAX_BRIGHTNESS) {
       brightness += BRIGHTNESS_ADDER;
       strip.setBrightness(brightness);
-      delay(BUTTON_DELAY); 
+      delay(BUTTON_DEBOUNCE); 
     }
   }
-  if (brightnessDownButton == 1) {
-    Serial.println("Brightness UP Pressed");
+  if (digitalRead(BRIGHTNESS_DOWN) == 1) {
+    Serial.println("Brightness DOWN Pressed");
     if (brightness >= 40) {
       brightness -= BRIGHTNESS_ADDER;
       strip.setBrightness(brightness);
-      delay(BUTTON_DELAY); 
+      delay(BUTTON_DEBOUNCE); 
     }
   }
-  
-  if (powerState == 1) {
-    // rainbowFade2White(3, 3, 1);
-    colorWipe(strip.Color(  0,   0,   0, 255), 10); // True white (not RGB white)
-  } else {
-    colorWipe(strip.Color(  0,   0,   0,   0), 10); // Turn off the lights all of the lights...
+
+  // Mode Button Handling 
+  if (digitalRead(MODE) == 1) { 
+    Serial.println("Mode Button Pressed");
+    if (++mode > (NUM_MODES-1)) mode = 0; 
+    Serial.print("Mode: "); Serial.println(mode); 
+    delay(BUTTON_DEBOUNCE); 
   }
 
-  if (onOffButton == 1) {
-    Serial.println("ON/OFF Pressed"); 
+  // Run Lights in whatever mode is selected
+  if (powerState == 1) { // Lights should be on
+    switch (mode) {
+      case 0: 
+        colorWipe(strip.Color(  0,   0,   0, 255), 10, 0); // True white (not RGB white)
+        break; 
+      case 1:
+        rainbow(10); 
+        break; 
+       }
+   } else {
+   colorWipe(strip.Color(  0,   0,   0,   0), 10, 1); // Turn off the lights all of the lights...
   }
-  
 }
  
-
-void rainbowFade2White(int wait, int rainbowLoops, int whiteLoops) {
-  int fadeVal=0, fadeMax=100;
-
-  // Hue of first pixel runs 'rainbowLoops' complete loops through the color
-  // wheel. Color wheel has a range of 65536 but it's OK if we roll over, so
-  // just count from 0 to rainbowLoops*65536, using steps of 256 so we
-  // advance around the wheel at a decent clip.
-  for(uint32_t firstPixelHue = 0; firstPixelHue < rainbowLoops*65536;
-    firstPixelHue += 256) {
-
-    for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
-
-      // Offset pixel hue by an amount to make one full revolution of the
-      // color wheel (range of 65536) along the length of the strip
-      // (strip.numPixels() steps):
-      uint32_t pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
-
-      // strip.ColorHSV() can take 1 or 3 arguments: a hue (0 to 65535) or
-      // optionally add saturation and value (brightness) (each 0 to 255).
-      // Here we're using just the three-argument variant, though the
-      // second value (saturation) is a constant 255.
-      strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue, 255,
-        255 * fadeVal / fadeMax)));
+// Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
+void rainbow(int wait) {
+  for(long firstPixelHue = 0; firstPixelHue < 3*65536; firstPixelHue += 256) {
+    for(int i=0; i<strip.numPixels(); i++) { 
+      int pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
+      strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue)));
     }
-
-    strip.show();
-    delay(wait);
-
-    if(firstPixelHue < 65536) {                              // First loop,
-      if(fadeVal < fadeMax) fadeVal++;                       // fade in
-    } else if(firstPixelHue >= ((rainbowLoops-1) * 65536)) { // Last loop,
-      if(fadeVal > 0) fadeVal--;                             // fade out
-    } else {
-      fadeVal = fadeMax; // Interim loop, make sure fade is at max
-    }
+    strip.show(); 
+    delay(wait); 
+    if ((digitalRead(MODE) == 1) || (digitalRead(ON_OFF) == 1)) {
+      delay(BUTTON_DEBOUNCE); 
+      return;
+    }  
   }
 }
 
-void colorWipe(uint32_t color, int wait) {
-  for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
-    strip.setPixelColor(i, color);         //  Set pixel's color (in RAM)
-    strip.show();                          //  Update strip to match
-    delay(wait);                           //  Pause for a moment
+void colorWipe(uint32_t color, int wait, int dir) {
+  for(int i=0; i<strip.numPixels(); i++) {
+    if (dir == 0) {
+      strip.setPixelColor(i, color);         
+    } else {
+      strip.setPixelColor((strip.numPixels() - 1) - i, color);
+    }
+    strip.show();                          
+    delay(wait);                         
   }
 }
