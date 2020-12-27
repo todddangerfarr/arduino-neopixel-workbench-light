@@ -18,9 +18,9 @@ int powerState = 0;
 int brightness = 75;    
 
 // Constants 
-const int MAX_BRIGHTNESS = 200; 
+const int MAX_BRIGHTNESS = 250; 
 const int BUTTON_DEBOUNCE = 300; 
-const int BRIGHTNESS_ADDER = 20;
+const int BRIGHTNESS_ADDER = 10;
 const int NUM_MODES = 2; 
 
 // Neopixel Class Instance
